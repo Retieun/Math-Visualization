@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vector Fields — Wind & Leaves</title>
+<style>
+  :root{
+    --ink:#0d1620;
+    --paper:#eef3f2;
+    --sky:#3d6e8e;
+    --sky-bright:#6fb0d4;
+    --leaf:#c98a3a;
+    --gold:#e0b84a;
+    --rose:#d9613b;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{height:100%;overflow:hidden;background:var(--ink);
+    font-family:"Georgia","Times New Roman",serif;color:var(--paper);}
+  #stage{position:fixed;inset:0;}
+  canvas{display:block;}
+
+  .panel{
+    position:fixed;top:22px;left:22px;z-index:10;
+    background:rgba(13,22,32,.80);
+    border:1px solid rgba(224,184,74,.32);
+    backdrop-filter:blur(8px);
+    padding:18px 20px 16px;border-radius:4px;max-width:300px;
+    box-shadow:0 18px 50px rgba(0,0,0,.5);
+  }
+  .panel h1{
+    font-size:15px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--gold);font-weight:normal;margin-bottom:2px;
+  }
+  .panel .sub{font-size:12.5px;line-height:1.5;opacity:.78;font-style:italic;
+    border-bottom:1px solid rgba(238,243,242,.14);padding-bottom:12px;margin-bottom:12px;}
+  .grouplabel{font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;
+    opacity:.5;margin:14px 0 7px;}
+  .fields{display:flex;gap:6px;flex-wrap:wrap;}
+  .fields button{flex:1 1 calc(50% - 3px);padding:8px 4px;font-size:11.5px;}
+  button{
+    font-family:inherit;font-size:12px;letter-spacing:.06em;
+    color:var(--paper);background:transparent;border:1px solid rgba(238,243,242,.28);
+    padding:7px 12px;border-radius:3px;cursor:pointer;transition:.18s;
+  }
+  button:hover{border-color:var(--gold);color:var(--gold);}
+  button.active{background:var(--sky);border-color:var(--sky-bright);color:#fff;}
+  .row{display:flex;align-items:center;gap:10px;margin:9px 0;}
+  .row label{font-size:13px;letter-spacing:.02em;cursor:pointer;flex:1;}
+  .switch{position:relative;width:42px;height:22px;flex:0 0 auto;}
+  .switch input{opacity:0;width:0;height:0;}
+  .track{position:absolute;inset:0;background:rgba(238,243,242,.18);
+    border-radius:22px;transition:.2s;cursor:pointer;}
+  .track:before{content:"";position:absolute;width:16px;height:16px;left:3px;top:3px;
+    background:var(--paper);border-radius:50%;transition:.2s;}
+  input:checked + .track{background:var(--sky);}
+  input:checked + .track:before{transform:translateX(20px);background:#fff;}
+
+  .props{margin-top:14px;border-top:1px solid rgba(238,243,242,.14);padding-top:12px;}
+  .prop{display:flex;align-items:center;gap:9px;margin:7px 0;font-size:12.5px;}
+  .prop .badge{font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+    padding:3px 8px;border-radius:11px;border:1px solid;min-width:54px;text-align:center;}
+  .badge.yes{color:#fff;}
+  .badge.no{opacity:.4;border-color:rgba(238,243,242,.3)!important;color:var(--paper);}
+  .curl.yes{background:rgba(217,97,59,.25);border-color:var(--rose);}
+  .div.yes{background:rgba(111,176,212,.25);border-color:var(--sky-bright);}
+
+  .hint{
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:10;
+    font-size:13px;letter-spacing:.04em;opacity:.62;font-style:italic;
+    background:rgba(13,22,32,.6);padding:7px 18px;border-radius:20px;
+    pointer-events:none;transition:opacity .4s;max-width:80vw;text-align:center;
+  }
+  .caption{
+    position:fixed;top:26px;left:50%;transform:translateX(-50%);z-index:11;
+    text-align:center;max-width:min(680px,82vw);pointer-events:none;
+  }
+  .cap-title{
+    font-size:30px;line-height:1.15;letter-spacing:.01em;color:var(--paper);
+    text-shadow:0 2px 20px rgba(0,0,0,.7);margin-bottom:6px;
+  }
+  .cap-sub{
+    font-size:16px;font-style:italic;opacity:.82;color:var(--gold);
+    text-shadow:0 2px 14px rgba(0,0,0,.7);
+  }
+  .cap-nav{margin-top:12px;display:flex;gap:12px;justify-content:center;
+    align-items:center;pointer-events:auto;}
+  .cap-nav button{font-size:12px;letter-spacing:.08em;padding:6px 14px;}
+  .cap-count{font-size:12px;opacity:.55;letter-spacing:.1em;min-width:46px;}
+  @media(max-width:560px){ .cap-title{font-size:22px;} .cap-sub{font-size:14px;} }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+
+<div class="panel">
+  <h1>Wind &amp; Leaves</h1>
+  <div class="sub">A vector field: a direction at every point in space. Here, the field is wind.</div>
+
+  <div class="grouplabel">Wind field</div>
+  <div class="fields" id="fields"></div>
+
+  <div class="grouplabel" style="margin-top:16px;">Show</div>
+  <div class="row">
+    <label for="arrows">Wind arrows</label>
+    <div class="switch"><input type="checkbox" id="arrows" checked><span class="track"></span></div>
+  </div>
+  <div class="row">
+    <label for="trails">Leaf trails (streamlines)</label>
+    <div class="switch"><input type="checkbox" id="trails" checked><span class="track"></span></div>
+  </div>
+
+  <div class="props">
+    <div class="prop">
+      <span class="badge curl" id="curl-badge">—</span>
+      <span><b>Curl</b> — does the wind circulate?</span>
+    </div>
+    <div class="prop">
+      <span class="badge div" id="div-badge">—</span>
+      <span><b>Divergence</b> — does it spread / gather?</span>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:14px;gap:6px;">
+    <button id="pause" style="flex:1;">⏸ Pause</button>
+    <button id="scatter" style="flex:1;">Scatter</button>
+    <button id="clear" style="flex:1;">Clear</button>
+  </div>
+</div>
+
+<div class="caption" id="caption">
+  <div class="cap-title" id="cap-title">What is a vector field?</div>
+  <div class="cap-sub" id="cap-sub">An arrow at every point in space. Here, wind.</div>
+  <div class="cap-nav">
+    <button id="cap-prev">‹ back</button>
+    <span class="cap-count" id="cap-count">1 / 5</span>
+    <button id="cap-next">next ›</button>
+  </div>
+</div>
+
+<div class="hint" id="hint">Click anywhere to drop a leaf &middot; drag to orbit &middot; scroll to zoom</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ===========================================================
+   A general 2D vector field W(x,z) = (u, w) over a flat plane.
+   Leaves are particles that ride the field: velocity eases toward
+   the local wind. Same loop as the golf demo, but the field is no
+   longer a gradient — so it can CURL (circulate) and DIVERGE
+   (sources/sinks), which a height-derived field never can.
+   =========================================================== */
+const SIZE = 60, HALF = SIZE/2;
+
+// --- field library: each returns [u, w] (wind velocity) at (x,z) ---
+const FIELDS = {
+  "Vortex": {
+    fn:(x,z)=>{ const r2=x*x+z*z+8; return [ -z/Math.sqrt(r2)*6, x/Math.sqrt(r2)*6 ]; },
+    curl:true, div:false,
+    hint:"A vortex — pure circulation. Leaves orbit forever; the wind has curl but never spreads. This is what a hill's field can NEVER do."
+  },
+  "Source": {
+    fn:(x,z)=>{ const r=Math.hypot(x,z)+1.5; return [ x/r*4.5, z/r*4.5 ]; },
+    curl:false, div:true,
+    hint:"A source — wind blows outward from a point. Positive divergence: leaves are carried away in every direction."
+  },
+  "Sink": {
+    fn:(x,z)=>{ const r=Math.hypot(x,z)+1.5; return [ -x/r*4.5, -z/r*4.5 ]; },
+    curl:false, div:true,
+    hint:"A sink — wind rushes inward to a point. Negative divergence: every leaf is drawn to the center."
+  },
+  "Gust": {
+    fn:(x,z)=>[ 5 + 1.6*Math.sin(z*0.18), 1.4*Math.sin(x*0.16) ],
+    curl:false, div:false,
+    hint:"A near-uniform gust drifting across the plane — gentle, mostly parallel flow."
+  },
+  "Saddle": {
+    fn:(x,z)=>[ x*0.6, -z*0.6 ],
+    curl:false, div:false,
+    hint:"A saddle — wind pushes out along one axis and in along the other. A leaf's fate depends entirely on where it starts."
+  },
+  "Spiral": {
+    fn:(x,z)=>{ const r=Math.hypot(x,z)+0.6;
+      // rotation (curl) + steady inward pull (negative divergence)
+      const rot=[ -z/r*5, x/r*5 ];
+      const inward=[ -x*0.9, -z*0.9 ];
+      return [ rot[0]+inward[0], rot[1]+inward[1] ]; },
+    curl:true, div:true,
+    hint:"A spiral sink — circulation AND inflow together. Leaves spiral inward, the most lifelike wind of all."
+  },
+};
+let fieldName="Vortex";
+let W = FIELDS[fieldName].fn;
+
+/* ---------- scene / camera ---------- */
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d1620);
+scene.fog = new THREE.Fog(0x0d1620, 70, 150);
+
+const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.1, 400);
+let camTheta=-1.0, camPhi=0.62, camR=78;
+const camTarget=new THREE.Vector3(0,0,0);
+function placeCamera(){
+  camera.position.set(
+    camTarget.x+camR*Math.sin(camPhi)*Math.cos(camTheta),
+    camTarget.y+camR*Math.cos(camPhi),
+    camTarget.z+camR*Math.sin(camPhi)*Math.sin(camTheta));
+  camera.lookAt(camTarget);
+}
+placeCamera();
+
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+document.getElementById('stage').appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xcfe3f0,0x202a30,0.85));
+const sun=new THREE.DirectionalLight(0xffffff,0.7);
+sun.position.set(30,50,20); scene.add(sun);
+
+/* ---------- the plane (the domain of the field) ---------- */
+const planeGeo=new THREE.PlaneGeometry(SIZE,SIZE,1,1);
+planeGeo.rotateX(-Math.PI/2);
+const plane=new THREE.Mesh(planeGeo, new THREE.MeshStandardMaterial({
+  color:0x16242f, roughness:1, metalness:0,
+  transparent:true, opacity:0.92}));
+scene.add(plane);
+// grid for spatial reference
+const grid=new THREE.GridHelper(SIZE, 24, 0x2c4a5c, 0x1d3340);
+grid.position.y=0.02; scene.add(grid);
+
+/* ---------- wind arrows (rebuilt per field) ---------- */
+const arrowGroup=new THREE.Group(); scene.add(arrowGroup);
+function buildArrows(){
+  while(arrowGroup.children.length) arrowGroup.remove(arrowGroup.children[0]);
+  const STEP=4, EDGE=HALF-2;
+  for(let x=-EDGE;x<=EDGE;x+=STEP){
+    for(let z=-EDGE;z<=EDGE;z+=STEP){
+      const [u,w]=W(x,z);
+      const mag=Math.hypot(u,w);
+      if(mag<1e-3) continue;
+      const dir=new THREE.Vector3(u,0,w).normalize();
+      const origin=new THREE.Vector3(x,0.15,z);
+      // color from speed: cool (slow) -> warm (fast)
+      const t=Math.min(mag/7,1);
+      const col=new THREE.Color().setRGB(0.30+t*0.58, 0.55-t*0.10, 0.62-t*0.42);
+      const a=new THREE.ArrowHelper(dir,origin,Math.min(1.6+mag*0.5,4.0),
+        col.getHex(),0.9,0.5);
+      arrowGroup.add(a);
+    }
+  }
+}
+
+/* ---------- leaves ---------- */
+const leaves=[];
+const leafGeo=new THREE.BufferGeometry();
+// a simple leaf: two triangles forming a pointed quad
+(()=>{
+  const v=new Float32Array([
+     0.0,0, 1.1,  0.5,0,-0.4, -0.5,0,-0.4,   // front face
+  ]);
+  leafGeo.setAttribute('position', new THREE.BufferAttribute(v,3));
+  leafGeo.computeVertexNormals();
+})();
+const leafColors=[0xc98a3a,0xb5702a,0xd7a24b,0xa85d2a,0xcf9445];
+
+function addLeaf(x,z){
+  const mat=new THREE.MeshStandardMaterial({
+    color:leafColors[(Math.random()*leafColors.length)|0],
+    roughness:0.7, metalness:0.05, side:THREE.DoubleSide});
+  const mesh=new THREE.Mesh(leafGeo, mat);
+  mesh.scale.setScalar(1.6);
+  scene.add(mesh);
+  // trail
+  const trailMat=new THREE.LineBasicMaterial({
+    color:0xd9b061, transparent:true, opacity:0.5});
+  const leaf={x, z, vx:0, vz:0, mesh, spin:Math.random()*6.28,
+    flutter:Math.random()*6.28, trailPts:[], trailLine:null, trailMat};
+  leaves.push(leaf);
+  positionLeaf(leaf);
+}
+function positionLeaf(leaf){
+  leaf.mesh.position.set(leaf.x, 1.0+0.3*Math.sin(leaf.flutter), leaf.z);
+  // orient: face direction of travel, with a flutter tilt
+  const sp=Math.hypot(leaf.vx,leaf.vz);
+  if(sp>0.05){
+    const ang=Math.atan2(leaf.vx, leaf.vz);
+    leaf.mesh.rotation.y=ang;
+  }
+  leaf.mesh.rotation.z=0.5*Math.sin(leaf.flutter*1.3);
+  leaf.mesh.rotation.x=0.3*Math.cos(leaf.flutter);
+}
+let showTrails=true;
+function updateLeafTrail(leaf){
+  if(!showTrails) return;
+  leaf.trailPts.push(new THREE.Vector3(leaf.x,0.6,leaf.z));
+  if(leaf.trailPts.length>200) leaf.trailPts.shift();
+  if(leaf.trailLine){ scene.remove(leaf.trailLine); leaf.trailLine.geometry.dispose(); }
+  const g=new THREE.BufferGeometry().setFromPoints(leaf.trailPts);
+  leaf.trailLine=new THREE.Line(g, leaf.trailMat); scene.add(leaf.trailLine);
+}
+function clearLeaves(){
+  for(const lf of leaves){
+    scene.remove(lf.mesh); lf.mesh.material.dispose();
+    if(lf.trailLine){ scene.remove(lf.trailLine); lf.trailLine.geometry.dispose(); }
+  }
+  leaves.length=0;
+}
+function scatterLeaves(){
+  for(let i=0;i<24;i++){
+    addLeaf((Math.random()*2-1)*HALF*0.85, (Math.random()*2-1)*HALF*0.85);
+  }
+}
+
+function stepLeaf(leaf, dt){
+  const [u,w]=W(leaf.x, leaf.z);
+  // leaf eases toward local wind (inertia) — light mass so it responds, not teleports
+  const RESP=2.2;
+  leaf.vx += (u-leaf.vx)*Math.min(1,dt*RESP);
+  leaf.vz += (w-leaf.vz)*Math.min(1,dt*RESP);
+  leaf.x += leaf.vx*dt;
+  leaf.z += leaf.vz*dt;
+  leaf.flutter += dt*3.5;
+  // wrap leaves that drift off the plane back in (so the scene stays alive)
+  const lim=HALF-0.5;
+  if(Math.abs(leaf.x)>lim || Math.abs(leaf.z)>lim){
+    // for sinks/spirals the center is the story; respawn at edge for sources
+    leaf.x=(Math.random()*2-1)*HALF*0.7; leaf.z=(Math.random()*2-1)*HALF*0.7;
+    leaf.vx=0; leaf.vz=0; leaf.trailPts=[];
+  }
+  positionLeaf(leaf);
+}
+
+/* ---------- picking ---------- */
+const ray=new THREE.Raycaster(), mouse=new THREE.Vector2();
+let dragged=false, down=false, downX=0, downY=0;
+renderer.domElement.addEventListener('pointerdown', e=>{
+  down=true; dragged=false; downX=e.clientX; downY=e.clientY;
+});
+renderer.domElement.addEventListener('pointermove', e=>{
+  if(!down) return;
+  const dx=e.clientX-downX, dy=e.clientY-downY;
+  if(Math.abs(dx)+Math.abs(dy)>4){
+    dragged=true;
+    camTheta-=dx*0.005; camPhi=Math.max(0.15,Math.min(1.45,camPhi+dy*0.005));
+    downX=e.clientX; downY=e.clientY; placeCamera();
+  }
+});
+renderer.domElement.addEventListener('pointerup', e=>{
+  down=false; if(dragged) return;
+  mouse.x=(e.clientX/innerWidth)*2-1; mouse.y=-(e.clientY/innerHeight)*2+1;
+  ray.setFromCamera(mouse,camera);
+  const hit=ray.intersectObject(plane);
+  if(hit.length){ addLeaf(hit[0].point.x, hit[0].point.z);
+    document.getElementById('hint').style.opacity=0; }
+});
+addEventListener('wheel', e=>{
+  camR=Math.max(28,Math.min(150,camR+e.deltaY*0.04)); placeCamera();
+},{passive:true});
+
+/* ---------- UI ---------- */
+document.getElementById('arrows').addEventListener('change', e=>{
+  arrowGroup.visible=e.target.checked;
+});
+document.getElementById('trails').addEventListener('change', e=>{
+  showTrails=e.target.checked;
+  if(!showTrails){ for(const lf of leaves){ if(lf.trailLine){ scene.remove(lf.trailLine); lf.trailLine.geometry.dispose(); lf.trailLine=null;} lf.trailPts=[]; } }
+});
+document.getElementById('scatter').addEventListener('click', ()=>{
+  scatterLeaves();
+  if(paused){ paused=false; pauseBtn.textContent='⏸ Pause'; pauseBtn.classList.remove('active'); }
+});
+document.getElementById('clear').addEventListener('click', clearLeaves);
+
+function setProps(){
+  const f=FIELDS[fieldName];
+  const cb=document.getElementById('curl-badge');
+  const db=document.getElementById('div-badge');
+  cb.textContent=f.curl?'yes':'no'; cb.className='badge curl '+(f.curl?'yes':'no');
+  db.textContent=f.div?'yes':'no';  db.className='badge div '+(f.div?'yes':'no');
+}
+
+const fbox=document.getElementById('fields');
+function selectField(name){
+  fieldName=name; W=FIELDS[name].fn;
+  [...fbox.children].forEach(c=>c.classList.toggle('active', c.textContent===name));
+  buildArrows(); setProps();
+  for(const lf of leaves){ lf.vx=0; lf.vz=0; lf.trailPts=[]; }
+  const hintEl=document.getElementById('hint');
+  hintEl.textContent=FIELDS[name].hint; hintEl.style.opacity=.62;
+}
+Object.keys(FIELDS).forEach(name=>{
+  const b=document.createElement('button');
+  b.textContent=name; if(name===fieldName) b.classList.add('active');
+  b.addEventListener('click', ()=>selectField(name));
+  fbox.appendChild(b);
+});
+
+/* ---------- beat sequence (the teaching script, on-screen) ---------- */
+const BEATS=[
+  { title:"What is a vector field?",
+    sub:"An arrow at every point in space. Here, the arrows are wind.",
+    field:"Gust" },
+  { title:"Things move along the field",
+    sub:"Drop a leaf — it follows the arrow it sits on. Click to add more.",
+    field:"Gust" },
+  { title:"A field can swirl",
+    sub:"A vortex: leaves orbit forever and never settle.",
+    field:"Vortex" },
+  { title:"A field can spread or gather",
+    sub:"A source pushes outward; a sink pulls inward.",
+    field:"Source" },
+  { title:"Real wind does both at once",
+    sub:"A spiral — circulation and inflow together.",
+    field:"Spiral" },
+];
+let beat=0;
+function showBeat(i){
+  beat=(i+BEATS.length)%BEATS.length;
+  const b=BEATS[beat];
+  document.getElementById('cap-title').textContent=b.title;
+  document.getElementById('cap-sub').textContent=b.sub;
+  document.getElementById('cap-count').textContent=(beat+1)+' / '+BEATS.length;
+  if(b.field && b.field!==fieldName) selectField(b.field);
+}
+document.getElementById('cap-prev').addEventListener('click', ()=>showBeat(beat-1));
+document.getElementById('cap-next').addEventListener('click', ()=>showBeat(beat+1));
+addEventListener('keydown', e=>{
+  if(e.key==='ArrowRight'||e.key===' ') showBeat(beat+1);
+  else if(e.key==='ArrowLeft') showBeat(beat-1);
+});
+
+/* ---------- init + loop ---------- */
+buildArrows(); setProps(); scatterLeaves(); showBeat(0);
+
+let paused=false;
+const pauseBtn=document.getElementById('pause');
+pauseBtn.addEventListener('click', ()=>{
+  paused=!paused;
+  pauseBtn.textContent = paused ? '▶ Resume' : '⏸ Pause';
+  pauseBtn.classList.toggle('active', paused);
+});
+
+let last=performance.now();
+function animate(now){
+  const dt=Math.min((now-last)/1000,0.033); last=now;
+  let tick=(animate.t=(animate.t||0)+1);
+  if(!paused){
+    for(const lf of leaves){
+      stepLeaf(lf, dt);
+      if(tick%2===0) updateLeafTrail(lf);
+    }
+  }
+  renderer.render(scene,camera);
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+addEventListener('resize', ()=>{
+  camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
